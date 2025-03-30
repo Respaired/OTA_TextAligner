@@ -40,6 +40,11 @@ logger = get_logger(__name__, log_level="DEBUG")
 # torch.autograd.detect_anomaly(True)
 torch.backends.cudnn.benchmark = True
 
+
+def log_print(message, logger):
+    logger.info(message)
+    print(message)
+
 @click.command()
 @click.option('-p', '--config_path', default='./Configs/config.yml', type=str)
 def main(config_path):
@@ -52,7 +57,7 @@ def main(config_path):
   writer = SummaryWriter(log_dir + "/tensorboard")
   
   ddp_kwargs = DistributedDataParallelKwargs()
-  accelerator = Accelerator(project_dir=log_dir, split_batches=True, kwargs_handlers=[ddp_kwargs], mixed_precision='bf16')    
+  accelerator = Accelerator(project_dir=log_dir, split_batches=True, kwargs_handlers=[ddp_kwargs])    
   if accelerator.is_main_process:
       writer = SummaryWriter(log_dir + "/tensorboard")
 
@@ -66,14 +71,14 @@ def main(config_path):
   epoch = config.get('epoch', 100)
   save_iter = 1
   batch_size = config.get('batch_size', 4)
-  log_interval = 1
+  log_interval = 10
   device = accelerator.device
   train_path = config.get('train_data', None)
   val_path = config.get('val_data', None)
   epochs = config.get('epochs', 1000)
 
   train_list, val_list = get_data_path_list(train_path, val_path)
-  train_list = val_list
+
   train_dataloader = build_dataloader(train_list,
                                       batch_size=batch_size,
                                       num_workers=8,
@@ -160,23 +165,23 @@ def main(config_path):
               scheduler.step()
           
 
-        if (i+1)%log_interval == 0 and accelerator.is_main_process:
-            log_print('Epoch [%d/%d], Step [%d/%d], Loss: %.5f, Forward Sum Loss: %.5f'
-                    %(epoch+1, epochs, i+1, len(train_list)//batch_size, loss), logger)
-            
-            writer.add_scalar('train/Forward Sum Loss', loss, iters)
-            # writer.add_scalar('train/d_loss', d_loss, iters)
+          if (i+1)%log_interval == 0 and accelerator.is_main_process:
+              log_print('Epoch [%d/%d], Step [%d/%d], Forward Sum Loss: %.5f'
+                      %(epoch+1, epochs, i+1, len(train_list)//batch_size, loss), logger)
+              
+              writer.add_scalar('train/Forward Sum Loss', loss, iters)
+              # writer.add_scalar('train/d_loss', d_loss, iters)
 
-            train_losses.append(loss.item())
-            train_fwd_losses.append(loss.item())
+              train_losses.append(loss.item())
+              train_fwd_losses.append(loss.item())
 
-            running_loss = 0
-            
-            accelerator.print('Time elasped:', time.time()-start_time)
+              running_loss = 0
+              
+              accelerator.print('Time elasped:', time.time()-start_time)
 
       # Calculate average training loss for this epoch
       avg_train_loss = sum(train_losses) / len(train_losses)
-      
+
       # Validation phase
       aligner.eval()
       val_losses = []
@@ -201,38 +206,38 @@ def main(config_path):
               
               val_losses.append(val_loss.item())
       
-        # Calculate average validation loss
-        avg_val_loss = sum(val_losses) / len(val_losses)
-        
-        # Log to TensorBoard
-        writer.add_scalar('epoch/train_loss', avg_train_loss, epoch)
-        writer.add_scalar('epoch/val_loss', avg_val_loss, epoch)
+          # Calculate average validation loss
+          avg_val_loss = sum(val_losses) / len(val_losses)
+          
+          # Log to TensorBoard
+          writer.add_scalar('epoch/train_loss', avg_train_loss, epoch)
+          writer.add_scalar('epoch/val_loss', avg_val_loss, epoch)
         
         # Save checkpoint every N epochs
-            
-        if (i+1)%save_iter == 0 and accelerator.is_main_process:
+          
+      if (i+1)%save_iter == 0 and accelerator.is_main_process:
 
-            print(f'Saving on step {epoch*len(train_dataloader)+i}...')
-            state = {
-                'net':  {key: aligner[key].state_dict() for key in model}, 
-                'optimizer': optimizer.state_dict(),
-                'iters': iters,
-                'epoch': epoch,
-            }
-            save_path = os.path.join(log_dir, 'checkpoints', f'TextAligner_checkpoint_epoch_{epoch}.pt')
-            torch.save(state, save_path)    
-        # Print summary for this epoch
-        epoch_time = time.time() - start_time
-        accelerator.print(f"Epoch {epoch}/{epochs} completed in {epoch_time:.2f}s | "
-              f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-        
-        # # Plot and save attention matrices for visualization
-        # if epoch % config.get('plot_every', 10) == 0:
-        #     plot_attention_matrices(aligner, val_dataloader, device, 
-        #                           os.path.join(log_dir, 'attention_plots', f'epoch_{epoch}'),
-        #                           num_samples=4)
-    
-    writer.close()
+          print(f'Saving on step {epoch*len(train_dataloader)+i}...')
+          state = {
+              'net':  {key: aligner[key].state_dict() for key in model}, 
+              'optimizer': optimizer.state_dict(),
+              'iters': iters,
+              'epoch': epoch,
+          }
+          save_path = os.path.join(log_dir, 'checkpoints', f'TextAligner_checkpoint_epoch_{epoch}.pt')
+          torch.save(state, save_path)    
+      # Print summary for this epoch
+      epoch_time = time.time() - start_time
+      accelerator.print(f"Epoch {epoch}/{epochs} completed in {epoch_time:.2f}s | "
+            f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+      
+      # # Plot and save attention matrices for visualization
+      # if epoch % config.get('plot_every', 10) == 0:
+      #     plot_attention_matrices(aligner, val_dataloader, device, 
+      #                           os.path.join(log_dir, 'attention_plots', f'epoch_{epoch}'),
+      #                           num_samples=4)
+  
+  writer.close()
 
 if __name__=="__main__":
     main()
