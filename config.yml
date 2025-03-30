@@ -1,0 +1,27 @@
+log_dir: "Checkpoint_fa"
+save_freq: 1
+device: "cuda"
+epochs: 200
+batch_size: 4
+pretrained_model: ""
+train_data: "/content/test.csv"
+val_data: "/content/test.csv"
+preprocess_parasm:
+  sr: 44100
+  spect_params:
+    n_fft: 2048
+    win_length: 2048
+    hop_length: 512
+  mel_params:
+    n_mels: 128
+
+
+model_params:
+   input_dim: 127
+   hidden_dim: 256
+   n_token: 214
+   token_embedding_dim: 512
+
+optimizer_params:
+  lr: 0.0005
+# accelerate launch train.py --config_path /home/ubuntu/respair/Darya_AuxiliaryASR_/Configs/config_per.yml
