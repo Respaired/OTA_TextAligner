@@ -4,6 +4,7 @@
 {}
 ---
 
-# What the hell is this?
+# What is this?
 
-a port of "One TTS Alignment To Rule Them All.
+a port of "One TTS Alignment To Rule Them All."
+it's untested. so may not work at all.
