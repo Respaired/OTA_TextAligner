@@ -190,14 +190,14 @@ def main(config_path):
           for batch in tqdm(val_dataloader, desc=f"Epoch {epoch}/{epochs} [Val]"):
               batch = [b.to(device) for b in batch]
               
-              text_input, text_input_length, mel_input, mel_input_length, attn_prior = batch
+              text_input, text_input_length, mel_input, mel_input_length = batch
               
               # Forward pass
               attn_soft, attn_logprob = aligner(spec=mel_input, 
                                               spec_len=mel_input_length, 
                                               text=text_input, 
                                               text_len=text_input_length,
-                                              attn_prior=attn_prior)
+                                              attn_prior=None)
               
               # Calculate loss
               val_loss = forward_sum_loss(attn_logprob=attn_logprob, 
