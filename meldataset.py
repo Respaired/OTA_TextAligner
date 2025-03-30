@@ -18,8 +18,6 @@ import librosa
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-from utils import *
-
 # from text_utils import TextCleaner
 np.random.seed(1)
 random.seed(1)
@@ -65,11 +63,12 @@ class TextCleaner:
                 print(text)
         return indexes
 
+    
 class MelDataset(torch.utils.data.Dataset):
     def __init__(self,
                  data_list,
-                 sr=44100,
-                 scaling_factor=1.0  # Add scaling_factor parameter
+                #  dict_path=DEFAULT_DICT_PATH,
+                 sr=44100
                 ):
 
         spect_params = SPECT_PARAMS
@@ -81,14 +80,14 @@ class MelDataset(torch.utils.data.Dataset):
         self.sr = sr
 
         self.to_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=44_100, 
-                                                              n_mels=128,
-                                                              n_fft=2048,
-                                                              win_length=2048,
-                                                              hop_length=512)
+                                                               n_mels=128,
+                                                               n_fft=2048,
+                                                               win_length=2048,
+                                                               hop_length=512)
         self.mean, self.std = -4, 4
         
-        # Add the beta-binomial interpolator
-        self.beta_binomial_interpolator = BetaBinomialInterpolator(scaling_factor=scaling_factor)
+        # self.g2p = hibiki_phon()
+
 
     def __len__(self):
         return len(self.data_list)
@@ -108,15 +107,12 @@ class MelDataset(torch.utils.data.Dataset):
 
         length_feature = acoustic_feature.size(1)
         acoustic_feature = acoustic_feature[:, :(length_feature - length_feature % 2)]
-        
-        # Generate attention prior matrix
-        text_len = text_tensor.size(0)
-        mel_len = acoustic_feature.size(1)
-        attn_prior = torch.from_numpy(self.beta_binomial_interpolator(mel_len, text_len)).float()
 
-        return wave_tensor, acoustic_feature, text_tensor, attn_prior, data[0]
+        return wave_tensor, acoustic_feature, text_tensor, data[0]
+
 
     def _load_tensor(self, data):
+        
         wave_path, text, speaker_id = data
         speaker_id = int(speaker_id)
         wave, sr = sf.read(wave_path)
@@ -124,7 +120,10 @@ class MelDataset(torch.utils.data.Dataset):
             wave = wave[:, 0].squeeze()
         if sr != 44100:
             wave = librosa.resample(wave, orig_sr=sr, target_sr=44100)
+            # print(wave_path, sr)
             
+        # wave = np.concatenate([np.zeros([5000]), wave, np.zeros([5000])], axis=0)
+        
         text = self.text_cleaner(text)
         
         text.insert(0, 0)
@@ -134,8 +133,14 @@ class MelDataset(torch.utils.data.Dataset):
 
         return wave, text, speaker_id
 
-# Now modify the Collater class to handle the attention prior
+
+
 class Collater(object):
+    """
+    Args:
+      return_wave (bool): if true, will return the wave data along with spectrogram. 
+    """
+
     def __init__(self, return_wave=False):
         self.text_pad_index = 0
         self.return_wave = return_wave
@@ -156,33 +161,25 @@ class Collater(object):
         texts = torch.zeros((batch_size, max_text_length)).long()
         input_lengths = torch.zeros(batch_size).long()
         output_lengths = torch.zeros(batch_size).long()
-        
-        # Add tensor for attention priors
-        attn_priors = torch.zeros((batch_size, max_mel_length, max_text_length)).float()
-        
         paths = ['' for _ in range(batch_size)]
-        
-        for bid, (_, mel, text, attn_prior, path) in enumerate(batch):
+        for bid, (_, mel, text, path) in enumerate(batch):
             mel_size = mel.size(1)
             text_size = text.size(0)
             mels[bid, :, :mel_size] = mel
             texts[bid, :text_size] = text
             input_lengths[bid] = text_size
             output_lengths[bid] = mel_size
-            
-            # Handle attention prior
-            attn_priors[bid, :mel_size, :text_size] = attn_prior
-            
             paths[bid] = path
             assert(text_size < (mel_size//2))
 
         if self.return_wave:
             waves = [b[0] for b in batch]
-            return texts, input_lengths, mels, output_lengths, attn_priors, paths, waves
+            return texts, input_lengths, mels, output_lengths, paths, waves
 
-        return texts, input_lengths, mels, output_lengths, attn_priors
+        return texts, input_lengths, mels, output_lengths
 
-# Update the build_dataloader function to use the new MelDataset and Collater
+
+
 def build_dataloader(path_list,
                      validation=False,
                      batch_size=4,
