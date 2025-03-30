@@ -13,6 +13,7 @@ from einops import rearrange
 from scipy import ndimage
 from torch.special import gammaln
 import torch.nn as nn
+from utils import *
 
 class AlignmentEncoder(torch.nn.Module):
     """
