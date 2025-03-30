@@ -18,6 +18,8 @@ import librosa
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+from utils import *
+
 # from text_utils import TextCleaner
 np.random.seed(1)
 random.seed(1)
