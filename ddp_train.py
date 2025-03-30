@@ -219,7 +219,7 @@ def main(config_path):
 
           print(f'Saving on step {epoch*len(train_dataloader)+i}...')
           state = {
-              'net':  {key: aligner[key].state_dict() for key in model}, 
+              'net':  {key: aligner[key].state_dict() for key in aligner}, 
               'optimizer': optimizer.state_dict(),
               'iters': iters,
               'epoch': epoch,
