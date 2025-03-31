@@ -12,4 +12,4 @@ it's untested. so may not work at all.
 # Why?
 
 using a Pre-trained aligner can enhance the convergence of your Voice Conversion or TTS models. 
-it can also be used to for what it's usually used for (-> aligning text to audio).
+it can also be used for what it's usually used for (-> aligning text to audio).
